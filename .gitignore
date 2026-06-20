@@ -1,0 +1,25 @@
+vendor/plenary.nvim
+
+# Editor swap/backup files
+*.swp
+*.swo
+*.swn
+*~
+*.bak
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+
+# Dependencies
+node_modules/
+
+nul
