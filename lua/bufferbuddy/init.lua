@@ -1,9 +1,9 @@
 local M = {}
 
 function M.open_chat()
-  -- Create a floating window
-  local width = math.floor(vim.o.columns * 0.8)
-  local height = math.floor(vim.o.lines * 0.7)
+  local window_w = math.floor(vim.o.columns * 0.8)
+  local width = math.min(100, window_w)
+  local height = math.floor(vim.o.lines * 0.8)
   local row = math.floor((vim.o.lines - height) / 2)
   local col = math.floor((vim.o.columns - width) / 2)
 
@@ -18,8 +18,7 @@ function M.open_chat()
     border = "rounded",
   })
 
-  vim.api.nvim_buf_set_name(buf, "bufferbuddy://chat")
-  vim.bo[buf].buftype = "acwrite"
+  vim.bo[buf].buftype = "nofile"
   vim.bo[buf].filetype = "markdown"
 
   local welcome = [[
