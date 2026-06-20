@@ -23,27 +23,27 @@ end
 
 --- @return string
 local function get_timestamp()
-  local date = os.date("%Y-%m-%d %H:%M:%S")
+  local date = os.date("%Y%m%d %H:%M:%S")
   return tostring(date)
 end
 
 --- @param ... any
---- @return ...any
+--- @return string
 local function to_json(...)
   local args = { ... }
   for i, v in ipairs(args) do
     if type(v) == "table" then
-      args[i] = vim.json.encode(v)
+      args[i] = vim.json.encode(v, { indent = "  " })
     end
   end
-  return unpack(args)
+  return table.concat(args, " ")
 end
 
 --- @param prefix string
---- @param ... any
+--- @param data string
 --- @return string
-local function write_out(prefix, ...)
-  local data = prefix .. table.concat({ ... }, "\t") .. "\n"
+local function write_out(prefix, data)
+  data = prefix .. data .. "\n"
 
   if not M.config.testing then
     vim.fn.mkdir(vim.fn.stdpath("data"), "p")
@@ -63,7 +63,8 @@ function M.debug(...)
   end
   local datetime = get_timestamp()
   local prefix = datetime .. " [DEBUG] "
-  return write_out(prefix, to_json(...))
+  local data = to_json(...)
+  return write_out(prefix, data)
 end
 
 function M.info(...)
@@ -72,7 +73,8 @@ function M.info(...)
   end
   local datetime = get_timestamp()
   local prefix = datetime .. " [INFO] "
-  return write_out(prefix, to_json(...))
+  local data = to_json(...)
+  return write_out(prefix, data)
 end
 
 function M.warn(...)
@@ -81,7 +83,8 @@ function M.warn(...)
   end
   local datetime = get_timestamp()
   local prefix = datetime .. " [WARN] "
-  return write_out(prefix, to_json(...))
+  local data = to_json(...)
+  return write_out(prefix, data)
 end
 
 function M.error(...)
@@ -90,7 +93,8 @@ function M.error(...)
   end
   local datetime = get_timestamp()
   local prefix = datetime .. " [ERROR] "
-  return write_out(prefix, to_json(...))
+  local data = to_json(...)
+  return write_out(prefix, data)
 end
 
 return M
