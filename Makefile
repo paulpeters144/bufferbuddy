@@ -10,6 +10,9 @@ test:
 		-u ${TESTS_INIT} \
 		-c "PlenaryBustedDirectory ${TESTS_DIR} { minimal_init = '${TESTS_INIT}' }"
 
+test-filter:
+	TEST_FILTER='$(name)' nvim --headless --noplugin -u ${TESTS_INIT} -c "luafile scripts/test-filter.lua"
+
 lint-lua:
 	@stylua --check lua/ plugin/ tests/
 	@luacheck lua/ plugin/ tests/
