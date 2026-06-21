@@ -1,11 +1,13 @@
 local M = {
   config = {
     testing = false,
-    loglevel = "warn",
+    loglevel = "debug",
   },
 }
 
-local log_path = vim.fn.stdpath("data") .. "/bufferbuddy.log"
+local log_dir = vim.fn.stdpath("data")
+local log_path = log_dir .. "/bufferbuddy.log"
+local dir_ready = false
 
 --- @param level string
 --- @return boolean
@@ -46,7 +48,10 @@ local function write_out(prefix, data)
   data = prefix .. data .. "\n"
 
   if not M.config.testing then
-    vim.fn.mkdir(vim.fn.stdpath("data"), "p")
+    if not dir_ready then
+      pcall(vim.uv.fs_mkdir, log_dir, 493)
+      dir_ready = true
+    end
     local file = io.open(log_path, "a")
     if file then
       file:write(data)

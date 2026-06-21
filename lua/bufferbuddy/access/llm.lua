@@ -1,29 +1,83 @@
 local logger = require("bufferbuddy.logger")
+local Tools = require("bufferbuddy.tools")
+
+require("bufferbuddy.tools.rg")
+require("bufferbuddy.tools.ast_grep")
+require("bufferbuddy.tools.find_definitions")
+
 local M = {
-  config = {},
+  config = {
+    provider = "gemini",
+    model = nil,
+    max_tool_rounds = 15,
+    max_tokens = nil,
+    max_history_entries = 20,
+    api_key = nil,
+  },
+  initialized = false,
 }
 
-local lorem_ipsum = {
-  "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-  "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-  "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.",
-  "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet.",
-  "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.",
+local provider = nil
+
+local default_models = {
+  gemini = "gemini-3.1-flash-lite",
+  claude = "claude-3-5-haiku-20241022",
 }
 
----
---- @param message string
---- @param callback fun(response: string): nil
---- @return nil
-function M.chat_completion(message, callback)
-  logger.info("sent message:", message)
-  vim.schedule(function()
-    math.randomseed(os.time())
-    local text = lorem_ipsum[math.random(#lorem_ipsum)]
-    vim.defer_fn(function()
-      callback(text)
-    end, math.random(2500, 5000))
-  end)
+function M.setup(config)
+  M.config = vim.tbl_deep_extend("force", M.config, config or {})
+  M.initialized = true
+  if not M.config.model then
+    M.config.model = default_models[M.config.provider]
+  end
+  logger.info("LLM configured with provider:", M.config.provider)
+end
+
+local function augment_with_context(message, context)
+  local ctx_parts = {}
+
+  context = context or {}
+
+  if context.filepath then
+    table.insert(ctx_parts, "[File: " .. context.filepath .. "]")
+  end
+
+  if context.visible_lines then
+    table.insert(
+      ctx_parts,
+      "[Visible lines: " .. context.visible_lines.top .. "-" .. context.visible_lines.bottom .. "]"
+    )
+  end
+
+  if #ctx_parts > 0 then
+    return table.concat(ctx_parts, "\n") .. "\n\n" .. message
+  end
+  return message
+end
+
+function M.chat_completion(params)
+  if not provider then
+    local Provider = require("bufferbuddy.access.providers." .. M.config.provider)
+    provider = Provider:new({
+      api_key = M.config.api_key,
+      model = M.config.model,
+      max_tool_rounds = M.config.max_tool_rounds,
+      max_tokens = M.config.max_tokens,
+      max_history_entries = M.config.max_history_entries,
+      project_root = vim.fn.getcwd(),
+    })
+  end
+
+  local user_message = augment_with_context(params.user_message, params.context)
+
+  provider:chat_completion({
+    user_message = user_message,
+    history = params.history,
+    callbacks = params.callbacks,
+    tools = params.no_tools and nil or Tools,
+    system_instruction = params.system_instruction,
+    max_tokens = params.max_tokens,
+  })
 end
 
 return M

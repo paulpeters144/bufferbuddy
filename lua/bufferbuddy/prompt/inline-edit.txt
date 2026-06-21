@@ -1,0 +1,12 @@
+File: {{FILEPATH}}
+
+Replace this selection:
+```
+{{CODE}}
+```
+
+Instruction: {{INSTRUCTION}}
+
+<MustObey>
+Your response is text that will be pasted into the file as the replacement. ONLY output the replacement code. NO bullet points. NO sentences. NO descriptions. NO documentation. NO "Here is the code." NO markdown. NO original code. If you output non-code text you will CORRUPT the file.
+</MustObey>

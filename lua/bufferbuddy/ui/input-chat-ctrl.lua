@@ -3,6 +3,7 @@ local UserInputWindow = require("bufferbuddy.ui.user-input-window")
 local Spinner = require("bufferbuddy.ui.spinner")
 local LLM = require("bufferbuddy.access.llm")
 local ChatHistory = require("bufferbuddy.access.chat-history")
+local util = require("bufferbuddy.ui.util")
 
 ---@type NvimModel
 local NvimModel = require("bufferbuddy.ui.nvim-model")
@@ -31,7 +32,7 @@ function Controller:new(opts)
   instance.total_row = total_row
   instance.col = col
   instance.selected_lines = nil
-  instance._chat_history = ChatHistory:new()
+  instance._chat_history = ChatHistory:new({ max_entries = LLM.config.max_history_entries })
   instance._spinner = Spinner:new()
   instance.ai_chat = AiChatWindow:new({
     width = instance.width,
@@ -49,6 +50,7 @@ function Controller:new(opts)
 end
 
 function Controller:open(selected_lines)
+  self:_capture_context()
   self.ai_chat:open()
   self.user_input:open()
   self:_setup_keymaps()
@@ -70,7 +72,50 @@ function Controller:open(selected_lines)
   end)
 end
 
---- Reads content from the input window, formats it, and triggers the chat submission.
+function Controller:open_explain(lines)
+  self:_capture_context()
+  self.ai_chat:open()
+  self.user_input:open()
+  self:_setup_keymaps()
+
+  if not lines or #lines == 0 then
+    return
+  end
+
+  self.selected_lines = lines
+  local marker = "[Selected ~" .. #lines .. " lines]"
+  self.vim.api.nvim_buf_set_lines(self.user_input.buf, 0, -1, false, { marker, "Explain this code:" })
+
+  self.vim.schedule(function()
+    pcall(function()
+      self.vim.api.nvim_set_current_win(self.user_input.win)
+    end)
+    self.vim.api.nvim_win_set_cursor(self.user_input.win, { 2, 0 })
+    self.vim.defer_fn(function()
+      if vim.api.nvim_buf_is_valid(self.user_input.buf) then
+        self:_send_message()
+      end
+    end, 50)
+  end)
+end
+
+function Controller:_capture_context()
+  self._context = {}
+
+  local filepath = vim.fn.expand("%:p")
+  if filepath and filepath ~= "" then
+    self._context.filepath = filepath
+  end
+
+  local win = vim.api.nvim_get_current_win()
+  if win and vim.api.nvim_win_is_valid(win) then
+    local wininfo = vim.fn.getwininfo(win)
+    if wininfo and #wininfo > 0 then
+      self._context.visible_lines = { top = wininfo[1].topline, bottom = wininfo[1].botline }
+    end
+  end
+end
+
 function Controller:_send_message()
   local lines = self.user_input:get_lines()
   if #lines <= 0 then
@@ -83,7 +128,6 @@ function Controller:_send_message()
     for i = 2, #lines do
       table.insert(user_lines, lines[i])
     end
-    -- TODO: detect code and add the ```code thing
     for _, line in ipairs(self.selected_lines) do
       table.insert(all_lines, line)
     end
@@ -94,8 +138,6 @@ function Controller:_send_message()
     all_lines = lines
   end
   self.selected_lines = nil
-
-  self._chat_history:add_user_message(all_lines)
 
   local formatted_lines = {}
   table.insert(formatted_lines, "### User")
@@ -111,47 +153,70 @@ function Controller:_send_message()
   self.vim.api.nvim_win_set_cursor(self.ai_chat.win, focused_line)
   self.vim.api.nvim_set_current_win(self.ai_chat.win)
 
-  self:_force_mode("normal")
+  util.force_mode(self.vim, "normal")
 
-  local messages_str = self._chat_history:to_string()
-
+  self.ai_chat:append_lines({ "### Assistant" })
   self._spinner:start({
     buf = self.ai_chat.buf,
-    text = "### Assistant  ",
+    text = "",
   })
-  local thinking_start = self._spinner.line
+  local tool_start_line = self._spinner.line
 
-  LLM.chat_completion(messages_str, function(response)
-    self._spinner:stop()
+  LLM.chat_completion({
+    user_message = table.concat(all_lines, "\n"),
+    context = self._context,
+    history = self._chat_history,
+    callbacks = {
+      on_tool_call = function(name, _args)
+        if not vim.api.nvim_buf_is_valid(self.ai_chat.buf) then
+          return
+        end
+        self._spinner:stop()
+        local buflen = #vim.api.nvim_buf_get_lines(self.ai_chat.buf, 0, -1, false)
+        vim.api.nvim_buf_set_lines(self.ai_chat.buf, tool_start_line, buflen, false, {
+          "🔧 Running `" .. name .. "`...",
+        })
+        self._spinner:start({
+          buf = self.ai_chat.buf,
+          text = "",
+        })
+      end,
+      on_result = function(text)
+        self._spinner:stop()
+        if not vim.api.nvim_buf_is_valid(self.ai_chat.buf) then
+          return
+        end
 
-    if not vim.api.nvim_buf_is_valid(self.ai_chat.buf) then
-      return
-    end
+        local response_lines = {}
+        for line in text:gmatch("[^\n]+") do
+          table.insert(response_lines, line)
+        end
+        table.insert(response_lines, "")
+        self._chat_history:add_user_message(all_lines)
+        self._chat_history:add_assistant_message(response_lines)
 
-    local response_lines = {}
-    for line in response:gmatch("[^\n]+") do
-      table.insert(response_lines, line)
-    end
-    self._chat_history:add_assistant_message(response_lines)
-
-    local assistant_lines = {}
-    table.insert(assistant_lines, "### Assistant")
-    for _, line in ipairs(response_lines) do
-      table.insert(assistant_lines, line)
-    end
-    table.insert(assistant_lines, "")
-
-    vim.api.nvim_buf_set_lines(self.ai_chat.buf, thinking_start, thinking_start + 1, false, assistant_lines)
-    local cursor_line = { thinking_start + #assistant_lines, 0 }
-    self.vim.api.nvim_win_set_cursor(self.ai_chat.win, cursor_line)
-  end)
+        local buflen = #vim.api.nvim_buf_get_lines(self.ai_chat.buf, 0, -1, false)
+        vim.api.nvim_buf_set_lines(self.ai_chat.buf, tool_start_line, buflen, false, response_lines)
+        local cursor_line = { tool_start_line + #response_lines, 0 }
+        self.vim.api.nvim_win_set_cursor(self.ai_chat.win, cursor_line)
+      end,
+      on_error = function(err)
+        self._spinner:stop()
+        if not vim.api.nvim_buf_is_valid(self.ai_chat.buf) then
+          return
+        end
+        local buflen = #vim.api.nvim_buf_get_lines(self.ai_chat.buf, 0, -1, false)
+        vim.api.nvim_buf_set_lines(self.ai_chat.buf, tool_start_line, buflen, false, { "Error: " .. err, "" })
+      end,
+    },
+  })
 end
 
 function Controller:close()
   self._spinner:stop()
   self.ai_chat:close()
   self.user_input:close()
-  self:_force_mode("normal")
+  util.force_mode(self.vim, "normal")
 end
 
 function Controller:_setup_keymaps()
@@ -169,7 +234,7 @@ function Controller:_setup_keymaps()
     silent = true,
     nowait = true,
     callback = function()
-      self:_force_mode("normal")
+      util.force_mode(vim, "normal")
     end,
   })
 
@@ -202,24 +267,6 @@ function Controller:_setup_keymaps()
       self.vim.cmd("startinsert!")
     end,
   })
-end
-
---- @param mode "normal" | "insert" | "visual"
-function Controller:_force_mode(mode)
-  local modes = {
-    normal = "<Esc>",
-    insert = "<Esc>i",
-    visual = "<Esc>v",
-    visual_line = "<Esc>V",
-    visual_block = "<Esc><C-v>",
-    replace = "<Esc>R",
-  }
-
-  if modes[mode] then
-    local keys = modes[mode]
-    local r = self.vim.api.nvim_replace_termcodes(keys, true, true, true)
-    self.vim.api.nvim_feedkeys(r, "n", false)
-  end
 end
 
 return Controller
