@@ -1,4 +1,5 @@
 local tools = require("bufferbuddy.tools")
+local util = require("bufferbuddy.tools.util")
 
 tools:register("rg", {
   name = "rg",
@@ -45,7 +46,7 @@ tools:register("rg", {
     return "Error: rg exited with code " .. exit_code .. ": " .. output
   end
 
-  local results = {}
+  local lines = {}
   local count = 0
   for line in output:gmatch("[^\n]+") do
     local ok, parsed = pcall(vim.json.decode, line)
@@ -55,15 +56,7 @@ tools:register("rg", {
       local fpath = data.path and data.path.text or "?"
       local line_num = data.line_number or 0
       local text = data.lines and data.lines.text or ""
-      table.insert(results, string.format("%s:%d: %s", fpath, line_num, text:gsub("^%s+", "")))
-    end
-  end
-
-  local max_results = 50
-  local truncated = #results > max_results
-  if truncated then
-    for i = max_results + 1, #results do
-      results[i] = nil
+      table.insert(lines, string.format("%s:%d: %s", fpath, line_num, text:gsub("^%s+", "")))
     end
   end
 
@@ -74,9 +67,8 @@ tools:register("rg", {
     return "No results"
   end
 
-  table.insert(results, 1, string.format("Found %d match(s):", count))
-  if truncated then
-    table.insert(results, string.format("(showing first %d of %d matches, truncated)", max_results, count))
-  end
-  return table.concat(results, "\n")
+  table.insert(lines, 1, string.format("Found %d match(s):", count))
+  local result = table.concat(lines, "\n")
+  local tail_msg = "(Results truncated. Consider using a more specific path or pattern.)"
+  return util.truncate(result, 50, tail_msg)
 end)

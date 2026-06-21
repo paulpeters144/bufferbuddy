@@ -1,4 +1,5 @@
 local tools = require("bufferbuddy.tools")
+local util = require("bufferbuddy.tools.util")
 
 tools:register("ast-grep", {
   name = "ast-grep",
@@ -54,7 +55,7 @@ tools:register("ast-grep", {
     return "No results or failed to parse output"
   end
 
-  local results = {}
+  local lines = {}
   local count = 0
   for _, item in ipairs(parsed) do
     count = count + 1
@@ -62,24 +63,15 @@ tools:register("ast-grep", {
     local line = item.line or 0
     local col = item.column or 0
     local text = item.text or ""
-    table.insert(results, string.format("%s:%d:%d: %s", fpath, line, col, text))
-  end
-
-  local max_results = 50
-  local truncated = #results > max_results
-  if truncated then
-    for i = max_results + 1, #results do
-      results[i] = nil
-    end
+    table.insert(lines, string.format("%s:%d:%d: %s", fpath, line, col, text))
   end
 
   if count == 0 then
     return "No matches found for pattern: " .. args.pattern
   end
 
-  table.insert(results, 1, string.format("Found %d match(s):", count))
-  if truncated then
-    table.insert(results, string.format("(showing first %d of %d matches, truncated)", max_results, count))
-  end
-  return table.concat(results, "\n")
+  table.insert(lines, 1, string.format("Found %d match(s):", count))
+  local result = table.concat(lines, "\n")
+  local tail_msg = "(Results truncated. Consider using a more specific path or pattern.)"
+  return util.truncate(result, 50, tail_msg)
 end)
