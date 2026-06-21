@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-field, undefined-global
 local logger = require("bufferbuddy.logger")
 
 describe("logger", function()

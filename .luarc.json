@@ -1,0 +1,12 @@
+{
+  "runtime": {
+    "version": "LuaJIT"
+  },
+  "workspace": {
+    "checkThirdParty": false,
+    "library": [
+      "types",
+      "/home/linuxbrew/.linuxbrew/Cellar/neovim/0.12.3/share/nvim/runtime/lua"
+    ]
+  }
+}

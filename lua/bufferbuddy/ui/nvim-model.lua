@@ -19,12 +19,6 @@
 ---@class NvimModel
 ---@field create fun(): Vim
 
----@type NvimModel
-local M = {}
-
----@return Vim
-function M.create()
-  return vim
-end
+local M = { create = function() return vim end }
 
 return M

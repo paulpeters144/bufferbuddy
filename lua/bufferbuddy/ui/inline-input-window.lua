@@ -56,7 +56,7 @@ function InlineInputWindow:open()
     wrapped[#wrapped + 1] = "  " .. pl
   end
 
-  local lines = { "", unpack(wrapped), "", "> ", "" }
+  local lines = { "", table.unpack(wrapped), "", "> ", "" }
   vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, lines)
 
   local prompt_count = #prompt_lines

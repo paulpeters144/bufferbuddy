@@ -1,6 +1,8 @@
 local Provider = require("bufferbuddy.access.provider")
 local prompts = require("bufferbuddy.prompt")
 
+---@class Claude: Provider
+---@field max_history_entries number|nil
 local Claude = setmetatable({}, Provider)
 Claude.__index = Claude
 

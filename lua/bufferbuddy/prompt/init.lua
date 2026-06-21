@@ -1,4 +1,4 @@
----@alias prompt_name "system.txt"|"inline-edit.txt"
+---@alias prompt_name "system.txt"|"inline-edit.txt"|"inline-edit-system.txt"
 
 local M = {}
 

@@ -1,4 +1,5 @@
 ---@class UserInputWindow
+---@field opts table
 local UserInputWindow = {}
 UserInputWindow.__index = UserInputWindow
 

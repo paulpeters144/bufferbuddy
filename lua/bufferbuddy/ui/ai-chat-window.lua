@@ -1,4 +1,5 @@
 ---@class AiChatWindow
+---@field opts table
 local AiChatWindow = {}
 AiChatWindow.__index = AiChatWindow
 

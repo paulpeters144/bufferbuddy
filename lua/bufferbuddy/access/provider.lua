@@ -140,38 +140,47 @@ function Provider:_tool_loop(state)
   })
 end
 
+---@return boolean
 function Provider:_check_api_key(_callbacks)
   return true
 end
 
+---@return table
 function Provider:_build_request(_state)
   error("Subclasses must implement _build_request")
 end
 
+---@return table
 function Provider:_parse_response(_response)
   error("Subclasses must implement _parse_response")
 end
 
+---@return table
 function Provider:_build_assistant_message(_response)
   error("Subclasses must implement _build_assistant_message")
 end
 
+---@return table
 function Provider:_build_user_message(_text)
   error("Subclasses must implement _build_user_message")
 end
 
+---@return table[]
 function Provider:_build_history(_history)
   error("Subclasses must implement _build_history")
 end
 
+---@return table
 function Provider:_build_tool_result(_tc, _ok, _result)
   error("Subclasses must implement _build_tool_result")
 end
 
+---@return table
 function Provider:_build_tool_results_message(_results)
   error("Subclasses must implement _build_tool_results_message")
 end
 
+---@return table
 function Provider:_convert_tools(_definitions)
   error("Subclasses must implement _convert_tools")
 end
