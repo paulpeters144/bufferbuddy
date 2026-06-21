@@ -1,5 +1,6 @@
 local Provider = require("bufferbuddy.access.provider")
 local prompts = require("bufferbuddy.prompt")
+local project = require("bufferbuddy.project")
 
 ---@class Claude: Provider
 ---@field max_history_entries number|nil
@@ -15,8 +16,9 @@ function Claude:new(config)
   instance.max_tokens = config.max_tokens or 8192
   instance.max_history_entries = config.max_history_entries
   instance.project_root = config.project_root or vim.fn.getcwd()
+  local root = project.summarize(instance.project_root) or ""
   instance.system_instruction = config.system_instruction
-    or (prompts.load("system.txt"):gsub("{{PROJECT_ROOT}}", instance.project_root))
+    or (prompts.load("system.txt"):gsub("{{PROJECT_ROOT}}", root):gsub("\n\n\n+", "\n\n"))
   return instance
 end
 

@@ -1,4 +1,5 @@
 File: {{FILEPATH}}
+{{PROJECT_ROOT}}
 
 Replace this selection:
 ```

@@ -1,5 +1,6 @@
 local LLM = require("bufferbuddy.access.llm")
 local logger = require("bufferbuddy.logger")
+local project = require("bufferbuddy.project")
 local prompts = require("bufferbuddy.prompt")
 local Spinner = require("bufferbuddy.ui.spinner")
 local InlineInputWindow = require("bufferbuddy.ui.inline-input-window")
@@ -95,18 +96,24 @@ function InlineEdit:_submit(instruction)
 
   local code_text = table.concat(self.lines, "\n")
 
+  local root = project.summarize() or ""
   local template = prompts.load("inline-edit.txt")
   if self.source_path and self.source_path ~= "" then
     template = template:gsub("{{FILEPATH}}", self.source_path)
   else
     template = template:gsub("File: {{FILEPATH}}\n\n", "")
   end
+  template = template:gsub("{{PROJECT_ROOT}}", root)
+  template = template:gsub("\n\n\n+", "\n\n")
   template = template:gsub("{{CODE}}", code_text)
   template = template:gsub("{{INSTRUCTION}}", instruction)
 
+  local system = prompts.load("inline-edit-system.txt"):gsub("{{PROJECT_ROOT}}", root)
+  system = system:gsub("\n\n\n+", "\n\n")
+
   LLM.chat_completion({
     user_message = template,
-    system_instruction = prompts.load("inline-edit-system.txt"),
+    system_instruction = system,
     max_tokens = 1024,
     callbacks = {
       on_result = function(text)

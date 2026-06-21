@@ -1,5 +1,4 @@
 local logger = require("bufferbuddy.logger")
-logger.config.loglevel = "debug"
 local registry = {}
 
 function registry:register(name, definition, handler)

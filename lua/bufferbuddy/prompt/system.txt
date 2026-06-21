@@ -5,7 +5,7 @@ You have access to tools that can search the user's codebase. Use these tools to
 Available tools:
 - rg: Search file contents by text/regex pattern. Use for finding usages, function calls, imports, definitions, and any text-based search.
 
-Project root directory: {{PROJECT_ROOT}}
+{{PROJECT_ROOT}}
 
 Rules:
 - Always use tools to search the codebase before answering.

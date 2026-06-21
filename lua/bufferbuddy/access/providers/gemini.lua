@@ -1,5 +1,6 @@
 local Provider = require("bufferbuddy.access.provider")
 local prompts = require("bufferbuddy.prompt")
+local project = require("bufferbuddy.project")
 
 local Gemini = setmetatable({}, Provider)
 Gemini.__index = Gemini
@@ -11,8 +12,9 @@ function Gemini:new(config)
   instance.model = config.model or "gemini-3.1-flash-lite"
   instance.max_tool_rounds = config.max_tool_rounds or 5
   instance.project_root = config.project_root or vim.fn.getcwd()
+  local root = project.summarize(instance.project_root) or ""
   instance.system_instruction = config.system_instruction
-    or (prompts.load("system.txt"):gsub("{{PROJECT_ROOT}}", instance.project_root))
+    or (prompts.load("system.txt"):gsub("{{PROJECT_ROOT}}", root):gsub("\n\n\n+", "\n\n"))
   return instance
 end
 

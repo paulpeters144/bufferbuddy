@@ -1,7 +1,7 @@
 local M = {
   config = {
     testing = false,
-    loglevel = "warn", -- "debug", "info", "warn", "error"
+    loglevel = "debug", -- "debug", "info", "warn", "error"
   },
 }
 
