@@ -1,0 +1,11 @@
+return {
+  ["luacov"] = {
+    statsfile = "luacov.stats.out",
+    reportfile = "luacov.report.out",
+    tick = 10,
+    include = {
+      "lua/bufferbuddy",
+    },
+    includeuntestedfiles = true,
+  },
+}
