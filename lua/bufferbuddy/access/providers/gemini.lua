@@ -31,17 +31,53 @@ function Gemini:_check_api_key(callbacks)
 end
 
 function Gemini:_build_request(state)
+  local gemini_contents = {}
+  for _, msg in ipairs(state.messages) do
+    if msg.role == "user" then
+      table.insert(gemini_contents, {
+        role = "user",
+        parts = { { text = msg.text } },
+      })
+    elseif msg.role == "assistant" then
+      local parts = {}
+      if msg.text then
+        table.insert(parts, { text = msg.text })
+      end
+      if msg.tool_calls then
+        for _, tc in ipairs(msg.tool_calls) do
+          table.insert(parts, {
+            functionCall = { name = tc.name, args = tc.args },
+          })
+        end
+      end
+      table.insert(gemini_contents, { role = "model", parts = parts })
+    elseif msg.role == "tool" then
+      local parts = {}
+      for _, tr in ipairs(msg.tool_results) do
+        table.insert(parts, {
+          functionResponse = {
+            name = tr.name,
+            response = tr.ok and { result = tr.result } or { error = tostring(tr.result) },
+          },
+        })
+      end
+      table.insert(gemini_contents, { role = "user", parts = parts })
+    end
+  end
+
   local body = {
     system_instruction = {
       parts = { { text = state.system_instruction or self.system_instruction } },
     },
-    contents = state.messages,
+    contents = gemini_contents,
   }
+
   if #state.tool_defs > 0 then
     body.tools = { {
       functionDeclarations = state.tool_defs,
     } }
   end
+
   return {
     url = string.format(
       "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
@@ -94,52 +130,6 @@ function Gemini:_parse_response(response)
 
   local text = #text_parts > 0 and table.concat(text_parts, "\n") or nil
   return { text = text, tool_calls = #tool_calls > 0 and tool_calls or nil }, nil
-end
-
-function Gemini:_build_assistant_message(response)
-  return response.candidates[1].content
-end
-
-function Gemini:_build_user_message(text)
-  return {
-    role = "user",
-    parts = { { text = text } },
-  }
-end
-
-function Gemini:_build_history(history)
-  local contents = {}
-  if history and history._entries then
-    for _, entry in ipairs(history._entries) do
-      local role = entry.role == "assistant" and "model" or "user"
-      local text = table.concat(entry.lines, "\n")
-      table.insert(contents, {
-        role = role,
-        parts = { { text = text } },
-      })
-    end
-  end
-  return contents
-end
-
-function Gemini:_build_tool_result(tc, ok, result)
-  return {
-    functionResponse = {
-      name = tc.name,
-      response = ok and { result = result } or { error = tostring(result) },
-    },
-  }
-end
-
-function Gemini:_build_tool_results_message(results)
-  return {
-    role = "user",
-    parts = results,
-  }
-end
-
-function Gemini:_convert_tools(tool_defs)
-  return tool_defs
 end
 
 return Gemini

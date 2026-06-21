@@ -7,6 +7,7 @@ local logger = require("bufferbuddy.logger")
 ---@field model string
 ---@field max_tool_rounds number
 ---@field max_tokens number|nil
+---@field max_history_entries number|nil
 ---@field project_root string
 ---@field system_instruction string|nil
 local Provider = {}
@@ -48,9 +49,27 @@ function Provider:chat_completion(params)
     return
   end
 
-  local messages = self:_build_history(history)
-  table.insert(messages, self:_build_user_message(user_message))
-  local tool_defs = tools and self:_convert_tools(tools:get_definitions()) or {}
+  local messages = {}
+  if history and history._entries then
+    local entries = history._entries
+    if self.max_history_entries and #entries > self.max_history_entries then
+      local start = #entries - self.max_history_entries + 1
+      local sliced = {}
+      for i = start, #entries do
+        table.insert(sliced, entries[i])
+      end
+      entries = sliced
+    end
+    for _, entry in ipairs(entries) do
+      table.insert(messages, {
+        role = entry.role,
+        text = table.concat(entry.lines, "\n"),
+      })
+    end
+  end
+  table.insert(messages, { role = "user", text = user_message })
+
+  local tool_defs = tools and tools:get_definitions() or {}
 
   vim.schedule(function()
     self:_tool_loop({
@@ -94,9 +113,14 @@ function Provider:_tool_loop(state)
         end
 
         if result.tool_calls and #result.tool_calls > 0 then
-          table.insert(state.messages, self:_build_assistant_message(response))
+          local assistant_msg = { role = "assistant" }
+          if result.text then
+            assistant_msg.text = result.text
+          end
+          assistant_msg.tool_calls = result.tool_calls
+          table.insert(state.messages, assistant_msg)
 
-          local results = {}
+          local tool_results = {}
           for _, tc in ipairs(result.tool_calls) do
             logger.info(self:_name() .. " tool called:", tc.name, tc.args)
 
@@ -116,10 +140,10 @@ function Provider:_tool_loop(state)
               res = res:sub(1, MAX_TOOL_OUTPUT) .. "\n... (output truncated to " .. MAX_TOOL_OUTPUT .. " chars)"
             end
 
-            table.insert(results, self:_build_tool_result(tc, ok, res))
+            table.insert(tool_results, { id = tc.id, name = tc.name, ok = ok, result = res })
           end
 
-          table.insert(state.messages, self:_build_tool_results_message(results))
+          table.insert(state.messages, { role = "tool", tool_results = tool_results })
 
           local MAX_TOOL_PAIRS = 4
           local max_messages = 1 + (MAX_TOOL_PAIRS * 2)
@@ -153,36 +177,6 @@ end
 ---@return table
 function Provider:_parse_response(_response)
   error("Subclasses must implement _parse_response")
-end
-
----@return table
-function Provider:_build_assistant_message(_response)
-  error("Subclasses must implement _build_assistant_message")
-end
-
----@return table
-function Provider:_build_user_message(_text)
-  error("Subclasses must implement _build_user_message")
-end
-
----@return table[]
-function Provider:_build_history(_history)
-  error("Subclasses must implement _build_history")
-end
-
----@return table
-function Provider:_build_tool_result(_tc, _ok, _result)
-  error("Subclasses must implement _build_tool_result")
-end
-
----@return table
-function Provider:_build_tool_results_message(_results)
-  error("Subclasses must implement _build_tool_results_message")
-end
-
----@return table
-function Provider:_convert_tools(_definitions)
-  error("Subclasses must implement _convert_tools")
 end
 
 return Provider

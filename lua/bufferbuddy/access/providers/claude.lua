@@ -35,15 +35,60 @@ function Claude:_check_api_key(callbacks)
 end
 
 function Claude:_build_request(state)
+  local claude_messages = {}
+  for _, msg in ipairs(state.messages) do
+    if msg.role == "user" then
+      table.insert(claude_messages, {
+        role = "user",
+        content = { { type = "text", text = msg.text } },
+      })
+    elseif msg.role == "assistant" then
+      local content = {}
+      if msg.text then
+        table.insert(content, { type = "text", text = msg.text })
+      end
+      if msg.tool_calls then
+        for _, tc in ipairs(msg.tool_calls) do
+          table.insert(content, {
+            type = "tool_use",
+            id = tc.id,
+            name = tc.name,
+            input = tc.args,
+          })
+        end
+      end
+      table.insert(claude_messages, { role = "assistant", content = content })
+    elseif msg.role == "tool" then
+      local tool_content = {}
+      for _, tr in ipairs(msg.tool_results) do
+        table.insert(tool_content, {
+          type = "tool_result",
+          tool_use_id = tr.id,
+          content = { { type = "text", text = tr.ok and tostring(tr.result) or "Error: " .. tostring(tr.result) } },
+        })
+      end
+      table.insert(claude_messages, { role = "user", content = tool_content })
+    end
+  end
+
   local body = {
     model = self.model,
     max_tokens = state.max_tokens or self.max_tokens,
     system = state.system_instruction or self.system_instruction,
-    messages = state.messages,
+    messages = claude_messages,
   }
+
   if #state.tool_defs > 0 then
-    body.tools = state.tool_defs
+    body.tools = {}
+    for _, def in ipairs(state.tool_defs) do
+      table.insert(body.tools, {
+        name = def.name,
+        description = def.description,
+        input_schema = def.parameters,
+      })
+    end
   end
+
   return {
     url = "https://api.anthropic.com/v1/messages",
     body = body,
@@ -85,69 +130,6 @@ function Claude:_parse_response(response)
 
   local text = #text_parts > 0 and table.concat(text_parts, "\n") or nil
   return { text = text, tool_calls = #tool_calls > 0 and tool_calls or nil }, nil
-end
-
-function Claude:_build_assistant_message(response)
-  return {
-    role = "assistant",
-    content = response.content,
-  }
-end
-
-function Claude:_build_user_message(text)
-  return {
-    role = "user",
-    content = { { type = "text", text = text } },
-  }
-end
-
-function Claude:_build_history(history)
-  local messages = {}
-  if history and history._entries then
-    local entries = history._entries
-    if self.max_history_entries and #entries > self.max_history_entries then
-      local start = #entries - self.max_history_entries + 1
-      entries = {}
-      for i = start, #history._entries do
-        table.insert(entries, history._entries[i])
-      end
-    end
-    for _, entry in ipairs(entries) do
-      local text = table.concat(entry.lines, "\n")
-      table.insert(messages, {
-        role = entry.role,
-        content = { { type = "text", text = text } },
-      })
-    end
-  end
-  return messages
-end
-
-function Claude:_build_tool_result(tc, ok, result)
-  return {
-    type = "tool_result",
-    tool_use_id = tc.id,
-    content = { { type = "text", text = ok and tostring(result) or "Error: " .. tostring(result) } },
-  }
-end
-
-function Claude:_build_tool_results_message(results)
-  return {
-    role = "user",
-    content = results,
-  }
-end
-
-function Claude:_convert_tools(tool_defs)
-  local converted = {}
-  for _, def in ipairs(tool_defs) do
-    table.insert(converted, {
-      name = def.name,
-      description = def.description,
-      input_schema = def.parameters,
-    })
-  end
-  return converted
 end
 
 return Claude
