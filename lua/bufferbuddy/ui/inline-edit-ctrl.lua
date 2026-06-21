@@ -9,31 +9,18 @@ vim.api.nvim_set_hl(0, "BufferBuddySpinner", { fg = "#89b4fa", bg = "#313244", b
 
 local editing_guard = false
 
-local PATTERNS = {
-  function_def = {
-    lua = "function $NAME($$$)",
-    python = "def $NAME($$$):",
-    js = "function $NAME($$$) { $$$ }",
-    ts = "function $NAME($$$) { $$$ }",
-    tsx = "function $NAME($$$) { $$$ }",
-    jsx = "function $NAME($$$) { $$$ }",
-    go = "func $NAME($$$) { $$$ }",
-    rust = "fn $NAME($$$)",
-    java = "function $NAME($$$) { $$$ }",
-    cpp = "function $NAME($$$) { $$$ }",
-    c = "function $NAME($$$) { $$$ }",
-  },
-  class_def = {
-    python = "class $NAME:",
-    js = "class $NAME { $$$ }",
-    ts = "class $NAME { $$$ }",
-    tsx = "class $NAME { $$$ }",
-    jsx = "class $NAME { $$$ }",
-    go = "type $NAME struct { $$$ }",
-    rust = "struct $NAME { $$$ }",
-    java = "class $NAME { $$$ }",
-    cpp = "class $NAME { $$$ }",
-  },
+local RG_DEF_PATTERNS = {
+  lua = [[^\s*function\s]],
+  python = [[^\s*(?:def|class)\s]],
+  js = [[^\s*(?:(?:async\s+)?function|class)\s]],
+  ts = [[^\s*(?:(?:async\s+)?function|class)\s]],
+  tsx = [[^\s*(?:(?:async\s+)?function|class)\s]],
+  jsx = [[^\s*(?:(?:async\s+)?function|class)\s]],
+  go = [[^\s*(?:func|type\s+\w+\s+struct)\s]],
+  rust = [[^\s*(?:fn|struct|enum|trait)\s]],
+  java = [[^\s*(?:(?:public|private|protected|static|final|abstract)?\s*(?:class|interface|enum)\s|(?:\w+\s+)+\w+\s*\()]],
+  cpp = [[^\s*(?:class|struct)\s]],
+  c = [[^\s*struct\s]],
 }
 
 local EXT_TO_LANG = {
@@ -233,7 +220,7 @@ function InlineEdit:_cancel()
 end
 
 function InlineEdit:_expand_selection()
-  if vim.fn.executable("ast-grep") == 0 then
+  if vim.fn.executable("rg") == 0 then
     return
   end
 
@@ -246,36 +233,53 @@ function InlineEdit:_expand_selection()
     return
   end
 
+  local pattern = RG_DEF_PATTERNS[language]
+  if not pattern then
+    return
+  end
+
   local sel_start = self.start_line
   local sel_end = self.end_line
-  local candidates = {}
 
-  for _, kind in ipairs({ "function_def", "class_def" }) do
-    local pattern = PATTERNS[kind][language]
-    if pattern then
-      local results = self:_run_astgrep(pattern, self.source_path, language)
-      if results then
-        for _, item in ipairs(results) do
-          local match_start = item.range.start.line + 1
-          local match_end = item.range["end"].line + 1
-          if match_start <= sel_start and match_end >= sel_end then
-            table.insert(candidates, {
-              start = match_start,
-              end_line = match_end,
-              size = match_end - match_start,
-            })
-          end
-        end
-      end
+  local cmd = { "rg", "--line-number", "--no-heading", "--color", "never", pattern, self.source_path }
+  local output = vim.fn.system(cmd)
+  local exit_code = vim.v.shell_error
+
+  if exit_code > 1 then
+    return
+  end
+
+  local def_lines = {}
+  for line in output:gmatch("[^\n]+") do
+    local lnum = line:match("^(%d+):")
+    if lnum then
+      table.insert(def_lines, tonumber(lnum))
     end
   end
 
-  if #candidates > 0 then
-    table.sort(candidates, function(a, b)
-      return a.size < b.size
-    end)
-    self.start_line = candidates[1].start
-    self.end_line = candidates[1].end_line
+  if #def_lines == 0 then
+    return
+  end
+
+  table.sort(def_lines)
+
+  local match_start = nil
+  local match_end = nil
+  for i = #def_lines, 1, -1 do
+    if def_lines[i] <= sel_start then
+      match_start = def_lines[i]
+      if i < #def_lines then
+        match_end = def_lines[i + 1] - 1
+      else
+        match_end = vim.api.nvim_buf_line_count(self.source_buf)
+      end
+      break
+    end
+  end
+
+  if match_start and match_end and match_end >= sel_end then
+    self.start_line = match_start
+    self.end_line = match_end
   end
 end
 
@@ -285,35 +289,6 @@ function InlineEdit:_detect_language(filepath)
     return nil
   end
   return EXT_TO_LANG[ext]
-end
-
-function InlineEdit:_run_astgrep(pattern, filepath, language)
-  local cmd = { "ast-grep", "--json" }
-  if language then
-    table.insert(cmd, "--lang")
-    table.insert(cmd, language)
-  end
-  table.insert(cmd, "-p")
-  table.insert(cmd, pattern)
-  table.insert(cmd, filepath)
-
-  local output = vim.fn.system(cmd)
-  local exit_code = vim.v.shell_error
-
-  if exit_code > 1 then
-    return nil
-  end
-
-  if exit_code == 1 or output == "" then
-    return {}
-  end
-
-  local ok, parsed = pcall(vim.json.decode, output)
-  if not ok then
-    return nil
-  end
-
-  return parsed
 end
 
 function InlineEdit:_show_spinner()

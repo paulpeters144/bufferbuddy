@@ -4,8 +4,7 @@ local util = require("bufferbuddy.tools.util")
 tools:register("rg", {
   name = "rg",
   description = "Search file contents by text or regex pattern using ripgrep. "
-    .. "Good for finding usages, function calls, imports, and any text string. "
-    .. "For definitions/declarations by syntactic structure, use ast-grep instead.",
+    .. "Good for finding usages, function calls, imports, definitions, and any text string.",
   parameters = {
     type = "object",
     properties = {

@@ -61,14 +61,6 @@ local function check()
     end
   end
 
-  do
-    if vim.fn.executable("ast-grep") == 1 then
-      local version = vim.fn.system({ "ast-grep", "--version" }):match("ast%-grep ([%d.]+)")
-      health.ok("ast-grep installed" .. (version and " (" .. version .. ")" or ""))
-    else
-      health.warn("ast-grep (sg) is not installed. The ast-grep tool will not work.")
-    end
-  end
 end
 
 return vim.health and { check = check } or { check = check }

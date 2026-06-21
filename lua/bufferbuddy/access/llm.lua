@@ -2,8 +2,6 @@ local logger = require("bufferbuddy.logger")
 local Tools = require("bufferbuddy.tools")
 
 require("bufferbuddy.tools.rg")
-require("bufferbuddy.tools.ast_grep")
-require("bufferbuddy.tools.find_definitions")
 
 local M = {
   config = {

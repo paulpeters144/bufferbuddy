@@ -8,13 +8,12 @@ AI coding assistant for Neovim powered by Google Gemini and Claude.
 - **Inline editing** — Edit code via natural language instructions
 - **Explain code** — Get instant explanations of single lines or selections
 - **Smart selection** — Auto-expands to enclosing function/class for edits
-- **Tool-supported** — LLM can run ripgrep, ast-grep, and definition searches
+- **Tool-supported** — LLM can run ripgrep searches
 
 ## Requirements
 
 - Neovim >= 0.10
 - `rg` (ripgrep) for code search
-- `ast-grep` (sg) for structural search (optional)
 - Google Gemini API key _or_ Anthropic API key (for Claude)
 
 ## Installation
